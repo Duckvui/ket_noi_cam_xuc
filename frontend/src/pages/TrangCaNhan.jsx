@@ -1,0 +1,5 @@
+function ProfilePage({ profile, onBack, onStartChat }) {
+  return <section className="profile-page"><button className="profile-back" onClick={onBack}>← Quay lại trang chủ</button><div className="profile-page-cover"></div><div className="profile-page-avatar">💜</div><h1>{profile.ten_hien_thi}</h1><p className="profile-nick">@{profile.tai_khoan.split('@')[0]}</p><p>{profile.gioi_thieu || 'Chưa có phần giới thiệu.'}</p><div className="profile-page-actions"><button>{profile.la_ban ? '✓ Bạn bè' : '＋ Kết bạn'}</button><button onClick={() => onStartChat(profile.id)}>✉ Nhắn tin</button><button>{profile.dang_theo_doi ? 'Đang theo dõi' : 'Theo dõi'}</button><button>Chặn</button></div><h2>Bài viết</h2>{profile.posts.length ? profile.posts.map((post) => <article className="profile-post" key={post.id}><small>{new Date(post.published_at).toLocaleString('vi-VN')}</small><p>{post.content || 'Bài viết có ảnh.'}</p></article>) : <p className="feed-message">Người dùng này chưa có bài viết công khai.</p>}</section>
+}
+
+export default ProfilePage
