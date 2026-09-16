@@ -35,7 +35,7 @@ function ThePet({ pet, danhMuc, hanhDong, reload }) {
     finally { setBusy(false) }
   }
 
-  return <article className="the-pet"><div className="pet-tom-tat"><PetAnimation pet={pet} /><div><h3>{pet.TenPet}</h3><small>{pet.thanh_vien.map((m) => m.ten).join(' & ')}</small><p>{tenTrangThai[pet.TrangThaiPet]} · {pet.DiemCamXuc}/100</p><meter min="0" max="100" value={pet.DiemCamXuc} aria-label="Điểm cảm xúc" /></div></div><div className="hanh-dong-pet">{hanhDong.map((action) => <button disabled={busy || remaining > 0} key={action.ma} onClick={() => thucHien(() => chamSocPet(pet.idPet, action.ma), true)}>{action.ten}</button>)}</div>{remaining > 0 && <small>Chờ {remaining} giây để chăm sóc tiếp</small>}<details><summary>Đổi tên / loại pet</summary><form className="form-pet" onSubmit={(e) => { e.preventDefault(); thucHien(() => doiPet(pet.idPet, { TenPet: ten, LoaiPet: loai })) }}><label>Tên mới<input required maxLength={50} value={ten} onChange={(e) => setTen(e.target.value)} /></label><label>Loại pet<select value={loai} onChange={(e) => setLoai(e.target.value)}>{danhMuc.map((type) => <option key={type.ma} value={type.ma}>{type.ten}</option>)}</select></label><button disabled={busy}>Lưu pet</button></form></details><button onClick={layLichSu}>Xem lịch sử</button>{lichSu && <LichSuTuongTacPet lichSu={lichSu} thanhVien={pet.thanh_vien} />}{loi && <p role="alert">{loi}</p>}{busy && <p role="status">Đang lưu…</p>}</article>
+  return <article className="the-pet"><div className="pet-tom-tat"><PetAnimation pet={pet} /><div><h3>{pet.TenPet}</h3><p className="pet-streak">🔥 Chuỗi {pet.current_streak || 0} ngày · Kỷ lục {pet.longest_streak || 0} ngày</p>{pet.last_activity_date && !pet.current_streak && <small>Chuỗi đã bị đứt. Hãy tương tác để bắt đầu lại.</small>}<small>{pet.thanh_vien.map((m) => m.ten).join(' & ')}</small><p>{tenTrangThai[pet.TrangThaiPet]} · {pet.DiemCamXuc}/100</p><meter min="0" max="100" value={pet.DiemCamXuc} aria-label="Điểm cảm xúc" /></div></div><div className="hanh-dong-pet">{hanhDong.map((action) => <button disabled={busy || remaining > 0} key={action.ma} onClick={() => thucHien(() => chamSocPet(pet.idPet, action.ma), true)}>{action.ten}</button>)}</div>{remaining > 0 && <small>Chờ {remaining} giây để chăm sóc tiếp</small>}<details><summary>Đổi tên / loại pet</summary><form className="form-pet" onSubmit={(e) => { e.preventDefault(); thucHien(() => doiPet(pet.idPet, { TenPet: ten, LoaiPet: loai })) }}><label>Tên mới<input required maxLength={50} value={ten} onChange={(e) => setTen(e.target.value)} /></label><label>Loại pet<select value={loai} onChange={(e) => setLoai(e.target.value)}>{danhMuc.map((type) => <option key={type.ma} value={type.ma}>{type.ten}</option>)}</select></label><button disabled={busy}>Lưu pet</button></form></details><button onClick={layLichSu}>Xem lịch sử</button>{lichSu && <LichSuTuongTacPet lichSu={lichSu} thanhVien={pet.thanh_vien} />}{loi && <p role="alert">{loi}</p>}{busy && <p role="status">Đang lưu…</p>}</article>
 }
 
 export default function PetChung({ user }) {
@@ -57,7 +57,8 @@ export default function PetChung({ user }) {
     Promise.resolve().then(reload)
     const timer = setInterval(reload, 15000)
     document.addEventListener('visibilitychange', reload)
-    return () => { requestId.current += 1; clearInterval(timer); document.removeEventListener('visibilitychange', reload) }
+    window.addEventListener('pet-hoat-dong', reload)
+    return () => { requestId.current += 1; clearInterval(timer); document.removeEventListener('visibilitychange', reload); window.removeEventListener('pet-hoat-dong', reload) }
   }, [reload])
   const petIds = pets.map((pet) => pet.idPet).join(',')
   useEffect(() => {

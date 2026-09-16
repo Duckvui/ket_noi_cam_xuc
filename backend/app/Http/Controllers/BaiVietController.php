@@ -25,6 +25,7 @@ class BaiVietController extends Controller
             ->get()->map(fn ($friend) => $friend->idTaiKhoan1 === $id ? $friend->idTaiKhoan2 : $friend->idTaiKhoan1);
 
         return BaiViet::where('TrangThaiBaiViet', 'Binh_Thuong')
+            ->whereNotIn('idTaiKhoan', app(\App\Services\QuanHeNguoiDung::class)->blockedIds($id))
             ->where(fn ($query) => $query->where('idTaiKhoan', $id)
                 ->orWhere('CheDoHienThi', 'Cong_Khai')
                 ->orWhere(fn ($friendQuery) => $friendQuery->where('CheDoHienThi', 'Ban_Be')->whereIn('idTaiKhoan', $friends)));

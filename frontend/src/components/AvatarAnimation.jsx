@@ -4,7 +4,7 @@ import './AvatarAnimation.css'
 
 const mau = { meo: '#edb6d1', gau: '#d6b395', tho: '#d8ccf3', cao: '#f4b773' }
 
-export default function AvatarAnimation({ idTaiKhoan, ma, camXuc, className = '', hienTen = false }) {
+export default function AvatarAnimation({ idTaiKhoan, ma, camXuc, className = '', hienTen = false, avatarUrl }) {
   const context = useContext(NguCanhCamXuc)
   const dangKy = context?.dangKy
   const [anhLoi, setAnhLoi] = useState(null)
@@ -13,7 +13,7 @@ export default function AvatarAnimation({ idTaiKhoan, ma, camXuc, className = ''
   const selected = ma === undefined ? data?.ma_avatar : ma
   const mood = camXuc || data?.cam_xuc?.ma || 'binh_thuong'
   const ten = data?.cam_xuc?.ten || 'Avatar'
-  const anh = data?.anh_avatar
+  const anh = data?.anh_avatar || avatarUrl
   return <span className={`avatar-animation ${className}`} title={ten}>
     {!selected ? (anh && anh !== anhLoi ? <img src={anh} alt="Avatar" onError={() => setAnhLoi(anh)} /> : <span role="img" aria-label="Avatar mặc định">💜</span>) : <svg className={`bieu-cam ${mood}`} viewBox="0 0 100 100" role="img" aria-label={`Avatar ${ten}`}>
       <g className="nhan-vat">

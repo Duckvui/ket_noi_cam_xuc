@@ -16,7 +16,7 @@ class Pet extends Model
 
     protected function casts(): array
     {
-        return ['NgayTao' => 'datetime', 'NgayCapNhat' => 'datetime', 'DiemCamXuc' => 'integer'];
+        return ['NgayTao' => 'datetime', 'NgayCapNhat' => 'datetime', 'DiemCamXuc' => 'integer', 'last_activity_date' => 'date', 'current_streak' => 'integer', 'longest_streak' => 'integer'];
     }
 
     public function taiKhoan()

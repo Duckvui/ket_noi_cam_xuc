@@ -23,6 +23,7 @@ class DichVuPet
 
     private function laBan(int $first, int $second): bool
     {
+        if (app(QuanHeNguoiDung::class)->blocked($first, $second)) return false;
         return BanBe::where('TrangThai', 'Dang_La_Ban')->where(fn ($q) => $q->where(fn ($q) => $q->where('idTaiKhoan1', $first)->where('idTaiKhoan2', $second))
             ->orWhere(fn ($q) => $q->where('idTaiKhoan1', $second)->where('idTaiKhoan2', $first)))->exists();
     }
@@ -102,6 +103,7 @@ class DichVuPet
             $last = TuongTacPet::where('idPet', $pet->idPet)->where('idNguoiGui', $user->idTaiKhoan)->latest('ThoiGianTuongTac')->first();
             abort_if($last && $last->ThoiGianTuongTac->gt(now()->subSeconds(config('pet.cooldown'))), 429, 'Hãy chờ 10 giây giữa hai lần chăm sóc pet.');
             $action = config('pet.hanh_dong.'.$ma);
+            $emotionBefore = $pet->camXucHienTai?->TenCamXuc ?? $pet->TrangThaiPet;
             $before = $pet->DiemCamXuc;
             $score = $this->quyDoi->gioiHan($before + $action['diem']);
             $pet->update(['DiemCamXuc' => $score, 'TrangThaiPet' => $this->quyDoi->trangThai($score), 'idCamXucHienTai' => null, 'NgayCapNhat' => now()]);
@@ -109,8 +111,10 @@ class DichVuPet
                 'idPet' => $pet->idPet, 'idNguoiGui' => $user->idTaiKhoan,
                 'idNguoiNhan' => $user->idTaiKhoan === $pet->idTaiKhoan ? $pet->idTaiKhoan2 : $pet->idTaiKhoan,
                 'LoaiTuongTac' => $action['loai'], 'MaHanhDong' => $ma, 'NoiDung' => $action['ten'],
+                'CamXucTruoc' => $emotionBefore, 'CamXucSau' => $this->quyDoi->trangThai($score),
                 'DiemThayDoi' => $score - $before, 'DiemSau' => $score, 'ThoiGianTuongTac' => now(),
             ]);
+            app(PetStreakService::class)->recordActivity($pet, $user);
             PetDaThayDoi::dispatch($pet->idPet);
         }, 3);
     }
@@ -134,6 +138,8 @@ class DichVuPet
         $animation = config('cam_xuc.cam_xucs.'.$pet->camXucHienTai?->TenCamXuc.'.ma');
 
         return ['idPet' => $pet->idPet, 'TenPet' => $pet->TenPet, 'LoaiPet' => $pet->LoaiPet,
+            'current_streak' => app(PetStreakService::class)->current($pet), 'longest_streak' => (int) $pet->longest_streak,
+            'last_activity_date' => $pet->last_activity_date?->toDateString(), 'NgayTao' => $pet->NgayTao?->toISOString(),
             'DiemCamXuc' => $pet->DiemCamXuc, 'TrangThaiPet' => $this->quyDoi->trangThai($pet->DiemCamXuc),
             'Animation' => $animation ?: $this->quyDoi->trangThai($pet->DiemCamXuc), 'NgayCapNhat' => $pet->NgayCapNhat?->toISOString(), 'thanh_vien' => $members];
     }
@@ -146,6 +152,7 @@ class DichVuPet
             ->map(fn ($row) => ['id' => 'cx-'.$row->id, 'idTaiKhoan' => $row->idTaiKhoan, 'noi_dung' => config('cam_xuc.cam_xucs.'.$row->TenCamXuc.'.ten', $row->TenCamXuc), 'diem' => $row->DiemThayDoi, 'diem_sau' => $row->DiemSau, 'thoi_gian' => $row->ThoiGianTao]);
         $actions = $pet->tuongTacs()->latest('idTuongTacPet')->limit(50)->get()->map(fn ($row) => [
             'id' => 'tt-'.$row->idTuongTacPet, 'idTaiKhoan' => $row->idNguoiGui, 'noi_dung' => $row->NoiDung,
+            'cam_xuc_truoc' => $row->CamXucTruoc, 'cam_xuc_sau' => $row->CamXucSau,
             'diem' => $row->DiemThayDoi, 'diem_sau' => $row->DiemSau, 'thoi_gian' => $row->ThoiGianTuongTac?->format('Y-m-d H:i:s'),
         ]);
 

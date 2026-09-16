@@ -44,6 +44,7 @@ Route::middleware('web')->group(function (): void {
         Route::get('cam-xuc-ca-nhan', [TrangThaiCamXucController::class, 'index']);
         Route::put('cam-xuc-ca-nhan/me', [TrangThaiCamXucController::class, 'store'])->middleware('throttle:12,1');
         Route::post('realtime/auth', fn (Request $request) => Broadcast::auth($request));
+        Route::get('tin-nhans/{tinNhan}/media', [ChatController::class, 'media'])->whereNumber('tinNhan')->name('chat.media');
         Route::prefix('tins')->group(function (): void {
             Route::get('/', [TinController::class, 'index']);
             Route::post('/', [TinController::class, 'store'])->middleware('throttle:20,1');
@@ -78,6 +79,8 @@ Route::middleware('web')->group(function (): void {
         });
 
         Route::prefix('nguoi-dung')->group(function (): void {
+            Route::get('/tim-kiem', [GuiKetBanController::class, 'search']);
+            Route::post('/{taiKhoan}/quan-he', [NguoiDungController::class, 'relationship'])->whereNumber('taiKhoan')->middleware('throttle:30,1');
             Route::get('/{taiKhoan}', [NguoiDungController::class, 'show'])->whereNumber('taiKhoan');
             Route::post('/{taiKhoan}/theo-doi', [NguoiDungController::class, 'follow'])->whereNumber('taiKhoan');
         });

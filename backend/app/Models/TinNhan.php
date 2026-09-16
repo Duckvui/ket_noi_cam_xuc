@@ -12,7 +12,7 @@ class TinNhan extends Model
 
     public $timestamps = false;
 
-    protected $fillable = ['idCuocTroChuyen', 'idNguoiGui', 'idTin', 'NoiDung', 'LoaiTinNhan', 'ThoiGianGui', 'TrangThaiTinNhan', 'NgayXoa'];
+    protected $fillable = ['idCuocTroChuyen', 'idNguoiGui', 'idTin', 'NoiDung', 'LoaiTinNhan', 'DuongDanTep', 'ThoiGianGui', 'TrangThaiTinNhan', 'NgayXoa'];
 
     protected function casts(): array
     {

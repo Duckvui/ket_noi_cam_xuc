@@ -25,6 +25,7 @@ class TinController extends Controller
             ->get()->map(fn ($friend) => $friend->idTaiKhoan1 == $id ? $friend->idTaiKhoan2 : $friend->idTaiKhoan1);
 
         return Tin::where('TrangThai', 'Binh_Thuong')->where('ThoiGianHetHan', '>', now())
+            ->whereNotIn('idTaiKhoan', app(\App\Services\QuanHeNguoiDung::class)->blockedIds($id))
             ->where(fn ($q) => $q->where('idTaiKhoan', $id)->orWhere('CheDoHienThi', 'Cong_Khai')
                 ->orWhere(fn ($q) => $q->where('CheDoHienThi', 'Ban_Be')->whereIn('idTaiKhoan', $friends)));
     }
@@ -159,53 +160,12 @@ class TinController extends Controller
         $content = trim($data['NoiDung']);
         abort_if($content === '', 422, 'Nội dung trả lời không được để trống.');
 
-        [$conversation, $message] = DB::transaction(function () use ($sender, $story, $content): array {
-            $memberConversationIds = ThanhVienCuocTroChuyen::query()
-                ->where('idTaiKhoan', $sender->idTaiKhoan)
-                ->where('TrangThai', 'Dang_Tham_Gia')
-                ->pluck('idCuocTroChuyen');
-
-            $conversation = CuocTroChuyen::query()
-                ->where('LoaiCuocTroChuyen', 'Ca_Nhan')
-                ->where('TrangThai', 'Dang_Hoat_Dong')
-                ->whereIn('idCuocTroChuyen', $memberConversationIds)
-                ->whereHas('thanhViens', fn ($query) => $query->where('idTaiKhoan', $story->idTaiKhoan)->where('TrangThai', 'Dang_Tham_Gia'))
-                ->whereHas('thanhViens', fn ($query) => $query->where('TrangThai', 'Dang_Tham_Gia'), '=', 2)
-                ->lockForUpdate()
-                ->first();
-
-            if (! $conversation) {
-                $conversation = CuocTroChuyen::create([
-                    'LoaiCuocTroChuyen' => 'Ca_Nhan',
-                    'NgayTao' => now(),
-                    'NgayCapNhat' => now(),
-                    'TrangThai' => 'Dang_Hoat_Dong',
-                ]);
-
-                foreach ([$sender->idTaiKhoan, $story->idTaiKhoan] as $accountId) {
-                    ThanhVienCuocTroChuyen::create([
-                        'idCuocTroChuyen' => $conversation->idCuocTroChuyen,
-                        'idTaiKhoan' => $accountId,
-                        'NgayThamGia' => now(),
-                        'TrangThai' => 'Dang_Tham_Gia',
-                    ]);
-                }
-            }
-
-            $message = TinNhan::create([
-                'idCuocTroChuyen' => $conversation->idCuocTroChuyen,
-                'idNguoiGui' => $sender->idTaiKhoan,
-                'idTin' => $story->idTin,
-                'NoiDung' => $content,
-                'LoaiTinNhan' => 'Van_Ban',
-                'ThoiGianGui' => now(),
-                'TrangThaiTinNhan' => 'Da_Gui',
-            ]);
-            $conversation->update(['NgayCapNhat' => now()]);
-
+        $service = app(\App\Services\DichVuChat::class);
+        [$conversation, $message] = DB::transaction(function () use ($service, $sender, $story, $content) {
+            $conversation = $service->start($sender, $story->idTaiKhoan);
+            $message = $service->send($sender, $conversation->idCuocTroChuyen, $content, null, $story->idTin);
             return [$conversation, $message];
-        });
-
+        }, 3);
         return response()->json(['data' => [
             'idCuocTroChuyen' => $conversation->idCuocTroChuyen,
             'tinNhan' => [

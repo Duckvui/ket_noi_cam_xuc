@@ -1,6 +1,9 @@
 import PetChung from '../components/PetChung'
 import ChinhSuaCamXuc from '../components/ChinhSuaCamXuc'
-import AvatarAnimation from '../components/AvatarAnimation'
+import UserAvatar from '../components/UserAvatar'
+import TimNguoiDung from '../components/TimNguoiDung'
+import { requestData } from '../services/nguoiDungService'
+import '../styles/KetNoi.css'
 import { useEffect, useState } from 'react'
 import { api } from '../api'
 import BaiDang from '../components/wall/BaiDang'
@@ -26,8 +29,8 @@ function WallPage({ user, onLogout }) {
   const [loadingPosts, setLoadingPosts] = useState(true)
   const [liked, setLiked] = useState([])
   const [friendCount, setFriendCount] = useState(0)
-  const [friendSearch, setFriendSearch] = useState('')
-  const [submittedSearch, setSubmittedSearch] = useState('')
+  const [profileLoading, setProfileLoading] = useState(false)
+  const [navigationError, setNavigationError] = useState('')
   const [profilePage, setProfilePage] = useState(null)
   const [chatOpen, setChatOpen] = useState(false)
   const [activeConversationId, setActiveConversationId] = useState(null)
@@ -74,21 +77,47 @@ function WallPage({ user, onLogout }) {
   }
 
   function toggleLike(id) { setLiked((current) => current.includes(id) ? current.filter((postId) => postId !== id) : [...current, id]) }
-  async function startChat(recipientId) {
-    const response = await api('/cuoc-tro-chuyens', { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify({ recipient_id: recipientId }) })
-    if (response.ok) {
-      const body = await response.json()
-      setActiveConversationId(body.data.id)
-      setChatOpen(true)
+  useEffect(() => {
+    let controller
+    let disposed = false
+    const navigate = async () => {
+      if (disposed) return
+      controller?.abort()
+      controller = new AbortController()
+      const signal = controller.signal
+      const profile = window.location.hash.match(/^#\/profile\/(\d+)$/)
+      const chat = window.location.hash.match(/^#\/messages\/(\d+)$/)
+      setNavigationError(''); setProfileLoading(false)
+      if (profile) {
+        setChatOpen(false); setProfilePage(null); setProfileLoading(true)
+        try {
+          const body = await requestData(`/nguoi-dung/${profile[1]}`, { signal })
+          if (!signal.aborted) setProfilePage(body.data)
+        } catch (failure) { if (!signal.aborted) setNavigationError(failure.message) }
+        finally { if (!signal.aborted) setProfileLoading(false) }
+      } else {
+        setProfilePage(null)
+        if (chat) { setActiveConversationId(Number(chat[1])); setChatOpen(true) }
+        else setChatOpen(false)
+      }
     }
-  }
+    void Promise.resolve().then(navigate)
+    window.addEventListener('hashchange', navigate)
+    window.addEventListener('quan-he-thay-doi', loadPosts)
+    return () => { disposed = true; controller?.abort(); window.removeEventListener('hashchange', navigate); window.removeEventListener('quan-he-thay-doi', loadPosts) }
+  }, [])
 
+  async function startChat(recipientId) {
+    const body = await requestData('/cuoc-tro-chuyens', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ recipient_id: recipientId }) })
+    setActiveConversationId(body.data.id); setChatOpen(true)
+    window.location.hash = `/messages/${body.data.id}`
+  }
   function openStoryConversation(result) {
     setActiveConversationId(result.idCuocTroChuyen)
     setChatOpen(true)
   }
 
-  return <div className="wall"><header className="topbar"><a className="brand" href="#home"><span>✦</span> Cảm Xúc</a><form className="search" onSubmit={(event) => { event.preventDefault(); setSubmittedSearch(friendSearch.trim()) }}>⌕ <input value={friendSearch} onChange={(event) => setFriendSearch(event.target.value)} placeholder="Tìm tên hoặc nick bạn bè..." /><button type="submit" aria-label="Tìm">⌕</button></form><nav><button className="nav-active">⌂</button><button>♧</button><button onClick={() => setChatOpen(true)}>✉</button></nav><AvatarAnimation idTaiKhoan={user.id} /></header><main className="wall-layout"><ThanhBenTrai user={user} onLogout={onLogout} friendCount={friendCount} />{profilePage ? <TrangCaNhan profile={profilePage} onBack={() => setProfilePage(null)} onStartChat={startChat} /> : <section className="feed"><section className="page-heading"><p>TRANG TƯỜNG</p><h1>Hôm nay bạn cảm thấy thế nào?</h1></section><ChinhSuaCamXuc user={user} /><PetChung user={user} /><TinNoiBat user={user} onStoryReply={openStoryConversation} /><KhungDangBai user={user} draft={draft} setDraft={setDraft} photo={photo} onPhotoChange={changePhoto} mood={mood} moods={moods} setMood={setMood} visibility={visibility} setVisibility={setVisibility} onPublish={publish} saving={publishing} error={postError} />{loadingPosts && <p className="feed-message" role="status">Đang tải bài viết...</p>}{feedError && <p className="feed-message error" role="alert">{feedError} <button onClick={loadPosts}>Thử lại</button></p>}{!loadingPosts && !feedError && posts.length === 0 && <p className="feed-message">Chưa có bài viết nào. Hãy là người đầu tiên chia sẻ cảm xúc của bạn.</p>}{posts.map((post) => <BaiDang key={post.id} post={post} isLiked={liked.includes(post.id)} onToggleLike={() => toggleLike(post.id)} />)}</section>}<ThanhBenPhai onFriendCountChange={setFriendCount} queryFromHeader={submittedSearch} onOpenProfile={setProfilePage} /></main><ChatBox open={chatOpen} onClose={() => setChatOpen(false)} user={user} activeConversationId={activeConversationId} /></div>
+  return <div className="wall"><header className="topbar"><a className="brand" href="#home"><span>✦</span> Cảm Xúc</a><TimNguoiDung header /><nav><button className="nav-active" onClick={() => { window.location.hash = 'home' }}>⌂</button><button>♧</button><button onClick={() => setChatOpen(true)}>✉</button></nav><UserAvatar user={user} /></header><main className="wall-layout"><ThanhBenTrai user={user} onLogout={onLogout} friendCount={friendCount} />{profileLoading ? <p role="status">Đang tải trang cá nhân...</p> : navigationError ? <p role="alert">{navigationError}</p> : profilePage ? <TrangCaNhan key={profilePage.id} profile={profilePage} onUpdated={setProfilePage} onBack={() => { window.location.hash = 'home' }} onStartChat={startChat} /> : <section className="feed"><section className="page-heading"><p>TRANG TƯỜNG</p><h1>Hôm nay bạn cảm thấy thế nào?</h1></section><ChinhSuaCamXuc user={user} /><PetChung user={user} /><TinNoiBat user={user} onStoryReply={openStoryConversation} /><KhungDangBai user={user} draft={draft} setDraft={setDraft} photo={photo} onPhotoChange={changePhoto} mood={mood} moods={moods} setMood={setMood} visibility={visibility} setVisibility={setVisibility} onPublish={publish} saving={publishing} error={postError} />{loadingPosts && <p className="feed-message" role="status">Đang tải bài viết...</p>}{feedError && <p className="feed-message error" role="alert">{feedError} <button onClick={loadPosts}>Thử lại</button></p>}{!loadingPosts && !feedError && posts.length === 0 && <p className="feed-message">Chưa có bài viết nào. Hãy là người đầu tiên chia sẻ cảm xúc của bạn.</p>}{posts.map((post) => <BaiDang key={post.id} post={post} isLiked={liked.includes(post.id)} onToggleLike={() => toggleLike(post.id)} />)}</section>}<ThanhBenPhai onFriendCountChange={setFriendCount} /></main><ChatBox open={chatOpen} onClose={() => { setChatOpen(false); if (window.location.hash.startsWith('#/messages/')) window.location.hash = 'home' }} user={user} activeConversationId={activeConversationId} /></div>
 }
 
 export default WallPage

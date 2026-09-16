@@ -5,6 +5,8 @@ use App\Models\TaiKhoan;
 use App\Policies\PetPolicy;
 use Illuminate\Support\Facades\Broadcast;
 
+Broadcast::channel('chat-user.{id}', fn (TaiKhoan $user, $id) => $user->idTaiKhoan === (int) $id, ['guards' => ['tai_khoan']]);
+
 Broadcast::channel('cam-xuc.{id}', function (TaiKhoan $user, $id) {
     // No emotion or visibility is broadcast; authorized API supplies current data.
     return TaiKhoan::whereKey($id)->exists();

@@ -19,7 +19,7 @@ class ChatController extends Controller
     {
         $account->loadMissing('thongTinCaNhan');
 
-        return ['id' => $account->idTaiKhoan, 'name' => trim(($account->thongTinCaNhan?->Ho ?? '').' '.($account->thongTinCaNhan?->Ten ?? '')) ?: $account->TaiKhoan];
+        return ['id' => $account->idTaiKhoan, 'name' => trim(($account->thongTinCaNhan?->Ho ?? '').' '.($account->thongTinCaNhan?->Ten ?? '')) ?: $account->TaiKhoan, 'avatar' => $account->avatarHienTai?->AnhAvatar];
     }
 
     private function message(TinNhan $message): array
@@ -36,7 +36,7 @@ class ChatController extends Controller
                 $other = $conversation->thanhViens->first(fn ($member) => $member->idTaiKhoan !== $me->idTaiKhoan)?->taiKhoan;
                 $last = $conversation->tinNhans->first();
 
-                return ['id' => $conversation->idCuocTroChuyen, 'person' => $other ? $this->person($other) : ['id' => $me->idTaiKhoan, 'name' => 'Nhóm chat'], 'last_message' => $last?->NoiDung, 'updated_at' => $last?->ThoiGianGui ?? $conversation->NgayCapNhat];
+                return ['id' => $conversation->idCuocTroChuyen, 'person' => $other ? $this->person($other) : ['id' => $me->idTaiKhoan, 'name' => 'Nhóm chat'], 'last_message' => $last?->NoiDung ?: ($last?->DuongDanTep ? '📷 Hình ảnh' : null), 'updated_at' => $last?->ThoiGianGui ?? $conversation->NgayCapNhat];
             })->sortByDesc('updated_at')->values();
 
         return response()->json(['data' => $items]);
@@ -45,37 +45,48 @@ class ChatController extends Controller
     public function start(Request $request)
     {
         $data = $request->validate(['recipient_id' => ['required', 'integer', 'exists:tai_khoans,idTaiKhoan']]);
-        $me = $request->user('tai_khoan');
-        abort_if($me->idTaiKhoan === (int) $data['recipient_id'], 422, 'Không thể tự nhắn tin cho chính mình.');
-        $candidateIds = ThanhVienCuocTroChuyen::where('idTaiKhoan', $me->idTaiKhoan)->where('TrangThai', 'Dang_Tham_Gia')->pluck('idCuocTroChuyen');
-        $conversation = CuocTroChuyen::where('LoaiCuocTroChuyen', 'Ca_Nhan')->whereIn('idCuocTroChuyen', $candidateIds)
-            ->whereHas('thanhViens', fn ($q) => $q->where('idTaiKhoan', $data['recipient_id'])->where('TrangThai', 'Dang_Tham_Gia'))
-            ->whereHas('thanhViens', fn ($q) => $q->where('TrangThai', 'Dang_Tham_Gia'), '=', 2)->first();
-        if (! $conversation) {
-            $conversation = CuocTroChuyen::create(['LoaiCuocTroChuyen' => 'Ca_Nhan', 'NgayTao' => now(), 'NgayCapNhat' => now(), 'TrangThai' => 'Dang_Hoat_Dong']);
-            foreach ([$me->idTaiKhoan, $data['recipient_id']] as $accountId) {
-                ThanhVienCuocTroChuyen::create(['idCuocTroChuyen' => $conversation->idCuocTroChuyen, 'idTaiKhoan' => $accountId, 'NgayThamGia' => now(), 'TrangThai' => 'Dang_Tham_Gia']);
-            }
-        }
-
+        $conversation = app(\App\Services\DichVuChat::class)->start($request->user('tai_khoan'), (int) $data['recipient_id']);
         return response()->json(['data' => ['id' => $conversation->idCuocTroChuyen]]);
     }
-
     public function messages(Request $request, int $conversation)
     {
-        $this->member($conversation, $request->user('tai_khoan')->idTaiKhoan);
-
-        return response()->json(['data' => TinNhan::where('idCuocTroChuyen', $conversation)->whereNull('NgayXoa')->oldest('ThoiGianGui')->limit(100)->get()->map(fn ($message) => $this->message($message))]);
+        $service = app(\App\Services\DichVuChat::class);
+        $service->members($conversation, $request->user('tai_khoan')->idTaiKhoan);
+        $data = $request->validate(['before' => ['nullable', 'integer', 'min:1']]);
+        $query = TinNhan::where('idCuocTroChuyen', $conversation)->whereNull('NgayXoa');
+        if (!empty($data['before'])) $query->where('idTinNhan', '<', $data['before']);
+        $messages = $query->orderByDesc('idTinNhan')->limit(100)->get()->reverse()->values();
+        return response()->json(['data' => $messages->map(fn ($message) => $service->data($message)), 'has_more' => $messages->count() === 100]);
     }
 
     public function send(Request $request, int $conversation)
     {
-        $me = $request->user('tai_khoan');
-        $this->member($conversation, $me->idTaiKhoan);
-        $data = $request->validate(['content' => ['required', 'string', 'max:2000']]);
-        $message = TinNhan::create(['idCuocTroChuyen' => $conversation, 'idNguoiGui' => $me->idTaiKhoan, 'NoiDung' => trim($data['content']), 'LoaiTinNhan' => 'Van_Ban', 'ThoiGianGui' => now(), 'TrangThaiTinNhan' => 'Da_Gui']);
-        CuocTroChuyen::whereKey($conversation)->update(['NgayCapNhat' => now()]);
+        $service = app(\App\Services\DichVuChat::class);
+        $service->members($conversation, $request->user('tai_khoan')->idTaiKhoan);
+        $data = $request->validate([
+            'content' => ['nullable', 'string', 'max:2000', 'required_without:image'],
+            'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120', 'required_without:content'],
+        ], ['content.required_without' => 'Nhập nội dung hoặc chọn ảnh.', 'image.required_without' => 'Nhập nội dung hoặc chọn ảnh.', 'image.max' => 'Ảnh tối đa 5 MB.', 'image.mimes' => 'Chỉ hỗ trợ JPG, PNG, WebP.']);
+        $path = null;
+        try {
+            if ($request->hasFile('image')) {
+                $path = $request->file('image')->store('chat', 'local');
+                if (!$path) throw new \RuntimeException('Không lưu được ảnh.');
+            }
+            $message = $service->send($request->user('tai_khoan'), $conversation, $data['content'] ?? null, $path);
+        } catch (\Throwable $error) {
+            if ($path && ! TinNhan::where('DuongDanTep', $path)->exists()) \Illuminate\Support\Facades\Storage::disk('local')->delete($path);
+            throw $error;
+        }
+        return response()->json(['data' => $service->data($message)], 201);
+    }
 
-        return response()->json(['data' => $this->message($message)], 201);
+    public function media(Request $request, TinNhan $tinNhan)
+    {
+        app(\App\Services\DichVuChat::class)->members($tinNhan->idCuocTroChuyen, $request->user('tai_khoan')->idTaiKhoan);
+        abort_if($tinNhan->NgayXoa || !$tinNhan->DuongDanTep, 404);
+        $disk = \Illuminate\Support\Facades\Storage::disk('local');
+        abort_unless($disk->exists($tinNhan->DuongDanTep), 404);
+        return response()->file($disk->path($tinNhan->DuongDanTep), ['Cache-Control' => 'private, no-store']);
     }
 }

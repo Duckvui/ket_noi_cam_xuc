@@ -1,4 +1,4 @@
-import AvatarAnimation from '../AvatarAnimation'
+import UserAvatar from '../UserAvatar'
 import { useEffect, useState } from 'react'
 import { echo } from '../../realtime'
 
@@ -127,7 +127,7 @@ function PostCard({ post }) {
         key={item.id}
       >
         <p>
-          <AvatarAnimation idTaiKhoan={item.idTaiKhoan} /> <strong>{item.name}</strong> {item.content}
+          <UserAvatar user={{ id: item.idTaiKhoan, name: item.name }} /> <a href={`#/profile/${item.idTaiKhoan}`}><strong>{item.name}</strong></a> {item.content}
         </p>
 
         <button
@@ -160,10 +160,10 @@ function PostCard({ post }) {
   return (
     <article className="post">
       <header>
-        <AvatarAnimation idTaiKhoan={post.idTaiKhoan} hienTen />
+        <UserAvatar user={{ id: post.idTaiKhoan, name: post.name }} showEmotion />
 
         <div>
-          <strong>{post.name}</strong>
+          <a href={`#/profile/${post.idTaiKhoan}`}><strong>{post.name}</strong></a>
 
           <p>
             {post.time}

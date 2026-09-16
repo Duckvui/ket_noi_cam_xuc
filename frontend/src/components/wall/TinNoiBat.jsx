@@ -25,6 +25,10 @@ export default function TinNoiBat({ user, onStoryReply }) {
   }
   useEffect(() => { void Promise.resolve().then(load) }, [])
   useEffect(() => {
+    window.addEventListener('quan-he-thay-doi', load)
+    return () => window.removeEventListener('quan-he-thay-doi', load)
+  }, [])
+  useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(timer)
   }, [])

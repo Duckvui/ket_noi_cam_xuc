@@ -12,7 +12,7 @@ class TuongTacPet extends Model
 
     public $timestamps = false;
 
-    protected $fillable = ['idNguoiGui', 'idNguoiNhan', 'idPet', 'LoaiTuongTac', 'NoiDung', 'ThoiGianTuongTac', 'MaHanhDong', 'DiemThayDoi', 'DiemSau'];
+    protected $fillable = ['idNguoiGui', 'idNguoiNhan', 'idPet', 'LoaiTuongTac', 'NoiDung', 'ThoiGianTuongTac', 'MaHanhDong', 'DiemThayDoi', 'DiemSau', 'CamXucTruoc', 'CamXucSau'];
 
     protected function casts(): array
     {
