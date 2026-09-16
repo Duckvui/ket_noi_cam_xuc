@@ -12,7 +12,7 @@ class TrangThaiCamXuc extends Model
 
     public $timestamps = false;
 
-    protected $fillable = ['idTaiKhoan', 'idCamXuc', 'NoiDung', 'MucDoCamXuc', 'ThoiGianTao', 'TrangThai'];
+    protected $fillable = ['idTaiKhoan', 'idCamXuc', 'NoiDung', 'MucDoCamXuc', 'ThoiGianTao', 'TrangThai', 'CheDoHienThi'];
 
     protected function casts(): array
     {
@@ -27,5 +27,10 @@ class TrangThaiCamXuc extends Model
     public function camXuc()
     {
         return $this->belongsTo(CamXuc::class, 'idCamXuc');
+    }
+
+    public function tacDongPets()
+    {
+        return $this->hasMany(LichSuCamXucPet::class, 'idTrangThaiCamXuc');
     }
 }

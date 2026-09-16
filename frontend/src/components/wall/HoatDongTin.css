@@ -1,0 +1,11 @@
+.story-activity-button { display:flex; gap:10px; align-items:center; border:0; border-radius:18px; padding:8px 12px; color:#fff; background:#ffffff1a; cursor:pointer; }
+.story-activity-panel { width:min(100%,420px); margin-top:12px; padding:14px; border-radius:12px; color:#fff; background:#ffffff12; }
+.story-activity-header { display:flex; align-items:center; justify-content:space-between; }
+.story-activity-header h3,.story-viewers h4 { margin:0; }
+.story-activity-header button { border:0; color:inherit; background:transparent; }
+.story-activity-summary { display:flex; gap:28px; margin:14px 0; }
+.story-activity-summary div { display:grid; gap:2px; }
+.story-activity-summary span { font-size:.82rem; opacity:.8; }
+.story-viewer-item { display:flex; align-items:center; gap:8px; margin-top:8px; }
+.story-viewer-avatar { display:grid; width:28px; height:28px; place-items:center; overflow:hidden; border-radius:50%; color:#312934; background:#fff; }
+.story-viewer-avatar img { width:100%; height:100%; object-fit:cover; }

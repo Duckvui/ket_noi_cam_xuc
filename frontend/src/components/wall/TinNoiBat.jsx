@@ -1,20 +1,99 @@
-import { useEffect, useRef, useState } from 'react'
-import { api } from '../../api'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { layDanhSachTin, thaCamXucTin, xemTin } from '../../services/tinService'
+import { adjacentStory, groupStories } from '../../services/storyPlayback'
+import AvatarAnimation from '../AvatarAnimation'
+import TaoTin from './TaoTin'
+import TrinhXemTin from './TrinhXemTin'
 import './TinNoiBat.css'
 
-const reactions = [['Thich', '👍'], ['Yeu_Thich', '❤️'], ['Haha', '😆'], ['Wow', '😮'], ['Buon', '😢'], ['Tuc_Gian', '😡']]
-const mediaUrl = path => `${(import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '')}${path.slice('/api'.length)}`
-
-export default function TinNoiBat() {
-  const [stories, setStories] = useState([]); const [selected, setSelected] = useState(null); const [creating, setCreating] = useState(false)
-  const [type, setType] = useState('VAN_BAN'); const [content, setContent] = useState(''); const [file, setFile] = useState(null); const [visibility, setVisibility] = useState('Cong_Khai'); const [progress, setProgress] = useState(0); const dialog = useRef(null)
-  const load = async () => { const r = await api('/tins', { headers: { Accept: 'application/json' } }); if (r.ok) setStories((await r.json()).data) }
-  useEffect(() => { load() }, [])
-  useEffect(() => { if (creating || selected) dialog.current?.showModal(); else dialog.current?.close() }, [creating, selected])
-  useEffect(() => { if (!selected || selected.LoaiTin === 'VIDEO') return undefined; const started = Date.now(); const timer = setInterval(() => { const value = Math.min(100, (Date.now() - started) / 300); setProgress(value); if (value === 100) setSelected(null) }, 100); return () => clearInterval(timer) }, [selected?.idTin])
-  const replace = story => setStories(current => current.map(item => item.idTin === story.idTin ? story : item))
-  async function openStory(story) { setProgress(0); setSelected(story); const r = await api(`/tins/${story.idTin}/xem`, { method: 'POST', headers: { Accept: 'application/json' } }); if (r.ok) { const value = (await r.json()).data; setSelected(value); replace(value) } }
-  async function react(type) { const r = await api(`/tins/${selected.idTin}/cam-xuc`, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify({ type }) }); if (r.ok) { const value = (await r.json()).data; setSelected(value); replace(value) } }
-  async function publish(event) { event.preventDefault(); const data = new FormData(); data.append('LoaiTin', type); data.append('NoiDung', content); data.append('CheDoHienThi', visibility); if (file) data.append('media', file); const r = await api('/tins', { method: 'POST', headers: { Accept: 'application/json' }, body: data }); if (r.ok) { const value = (await r.json()).data; setStories(current => [value, ...current]); setCreating(false); setContent(''); setFile(null) } }
-  return <section aria-label="Tin trong 24 giờ"><div className="stories story-list"><button className="story story-button" onClick={() => setCreating(true)}><span className="story-ring">＋</span><small>Đăng tin</small></button>{stories.map(story => <button className="story story-button" key={story.idTin} onClick={() => openStory(story)}><span className="story-ring">{story.LoaiTin === 'ANH' ? <img src={mediaUrl(story.media_url)} alt="" /> : story.LoaiTin === 'VIDEO' ? '▶' : 'Aa'}</span><small>{story.ten_hien_thi}</small></button>)}</div><dialog ref={dialog} className={selected ? 'story-dialog story-fullscreen' : 'story-dialog'} onCancel={event => { event.preventDefault(); setSelected(null); setCreating(false) }}><header><h2>{creating ? 'Đăng tin mới' : selected?.ten_hien_thi}</h2><button onClick={() => { setSelected(null); setCreating(false) }}>✕</button></header>{creating && <form onSubmit={publish}><label>Loại tin<select value={type} onChange={e => { setType(e.target.value); setFile(null) }}><option value="VAN_BAN">Văn bản</option><option value="ANH">Ảnh</option><option value="VIDEO">Video</option></select></label><label>Nội dung<textarea value={content} onChange={e => setContent(e.target.value)} required={type === 'VAN_BAN'} /></label>{type !== 'VAN_BAN' && <input type="file" required accept={type === 'ANH' ? 'image/*' : 'video/mp4,video/webm'} onChange={e => setFile(e.target.files?.[0])} />}<label>Hiển thị<select value={visibility} onChange={e => setVisibility(e.target.value)}><option value="Cong_Khai">Công khai</option><option value="Ban_Be">Bạn bè</option><option value="Chi_Minh_Toi">Chỉ mình tôi</option></select></label><button className="story-submit">Đăng tin</button></form>}{selected && <div className="story-view">{selected.LoaiTin !== 'VIDEO' && <div className="story-progress"><i style={{ width: `${progress}%` }} /></div>}{selected.LoaiTin === 'ANH' && <img className="story-media" src={mediaUrl(selected.media_url)} alt="Tin" />}{selected.LoaiTin === 'VIDEO' && <video className="story-media" src={mediaUrl(selected.media_url)} autoPlay controls onEnded={() => setSelected(null)} />}{selected.NoiDung && <p className={selected.LoaiTin === 'VAN_BAN' ? 'story-text' : ''}>{selected.NoiDung}</p>}<div className="story-footer"><span>{selected.reactions_count || 0} cảm xúc</span>{selected.is_owner && <span>◉ {selected.views_count || 0} lượt xem</span>}</div>{selected.is_owner && selected.viewers?.length > 0 && <div className="story-viewers"><strong>Đã xem</strong>{selected.viewers.map(viewer => <span key={viewer.id}>{viewer.name}</span>)}</div>}<div className="story-reactions">{reactions.map(([key, icon]) => <button className={selected.my_reaction === key ? 'active' : ''} onClick={() => react(key)} key={key}>{icon}</button>)}</div></div>}</dialog></section>
+export default function TinNoiBat({ user, onStoryReply }) {
+  const [stories, setStories] = useState([])
+  const [selectedId, setSelectedId] = useState(null)
+  const [mode, setMode] = useState(null)
+  const [now, setNow] = useState(Date.now)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const dialog = useRef(null)
+  const groups = useMemo(() => groupStories(stories, user.id, now), [stories, user.id, now])
+  const group = groups.find(item => item.stories.some(story => story.idTin === selectedId))
+  const selected = group?.stories.find(story => story.idTin === selectedId)
+  async function load() {
+    setLoading(true)
+    try { setStories(await layDanhSachTin()); setNow(Date.now()); setError('') }
+    catch (failure) { setError(failure.message) }
+    finally { setLoading(false) }
+  }
+  useEffect(() => { void Promise.resolve().then(load) }, [])
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [])
+  useEffect(() => {
+    if (!mode) { dialog.current?.close(); return undefined }
+    if (!dialog.current?.open) dialog.current?.showModal()
+    const previous = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = previous }
+  }, [mode])
+  useEffect(() => {
+    if (mode !== 'view' || selectedId === null) return undefined
+    let cancelled = false
+    xemTin(selectedId).then(updated => {
+      if (!cancelled) setStories(current => current.map(item => item.idTin === updated.idTin ? updated : item))
+    }).catch(failure => { if (!cancelled) setError(failure.message) })
+    return () => { cancelled = true }
+  }, [selectedId, mode])
+  // Continue past a story that expires while the viewer is open.
+  useEffect(() => {
+    if (mode !== 'view' || selected || selectedId === null) return
+    const all = groupStories(stories, user.id, 0).flatMap(item => item.stories)
+    const index = all.findIndex(item => item.idTin === selectedId)
+    const next = all.slice(index + 1).find(item => new Date(item.ThoiGianHetHan).getTime() > now)
+    const timer = setTimeout(() => setSelectedId(next?.idTin ?? null), 0)
+    return () => clearTimeout(timer)
+  }, [mode, selected, selectedId, stories, user.id, now])
+  function openStory(story) { setSelectedId(story.idTin); setMode('view'); setError('') }
+  function close() { setMode(null); setSelectedId(null); setError('') }
+  function move(direction) {
+    const next = adjacentStory(groups, selectedId, direction)
+    if (next) openStory(next)
+    else if (direction > 0) setSelectedId(null)
+  }
+  async function react(type) {
+    const id = selectedId
+    const updated = await thaCamXucTin(id, type)
+    setStories(current => current.map(item => item.idTin === id ? updated : item))
+  }
+  function create() { setSelectedId(null); setMode('create'); setError('') }
+  const mine = groups.find(item => item.id === String(user.id))
+  const userButton = item => <button type="button" className={`story-person ${group?.id === item.id ? 'active' : ''}`} key={item.id} onClick={() => openStory(item.stories[0])}>
+    <AvatarAnimation idTaiKhoan={Number(item.id)} /><span><strong>{item.name}</strong><small>{item.stories.length} tin</small></span>
+  </button>
+  return <section aria-label="Tin trong 24 giờ">
+    <div className="stories story-list">
+      <button type="button" className="story story-button" onClick={create}><span className="story-ring">＋</span><small>Tạo tin</small></button>
+      {groups.map(item => <button type="button" className="story story-button" key={item.id} onClick={() => openStory(item.stories[0])}><span className="story-ring"><AvatarAnimation idTaiKhoan={Number(item.id)} /></span><small>{item.id === String(user.id) ? 'Tin của bạn' : item.name}</small></button>)}
+      {loading && <small role="status">Đang tải tin...</small>}
+      {!loading && !groups.length && <small>Chưa có tin. Chia sẻ khoảnh khắc đầu tiên!</small>}
+    </div>
+    {error && !mode && <p role="alert" className="story-error">{error} <button onClick={load}>Thử lại</button></p>}
+    <dialog ref={dialog} className={`story-dialog ${mode === 'create' ? 'story-creator' : 'story-fullscreen'}`} aria-label={mode === 'create' ? 'Tạo tin' : 'Xem tin'} onCancel={event => { event.preventDefault(); close() }} onClose={close}>
+      {mode && <div className="story-layout">
+        <aside className="story-sidebar">
+          <button type="button" className="story-close" onClick={close} aria-label="Đóng tin">✕</button>
+          <h2>Tin của bạn</h2>
+          {mode === 'create' ? <div className="story-person"><AvatarAnimation idTaiKhoan={user.id} /><strong>{user.ten_hien_thi || user.tai_khoan}</strong></div> : <>
+            <button type="button" className="story-person" onClick={create}><span className="story-add">＋</span><span><strong>Tạo tin</strong><small>Chia sẻ ảnh, video hoặc văn bản</small></span></button>
+            {mine && userButton(mine)}
+            <h3>Tất cả tin</h3>
+            {groups.filter(item => item.id !== String(user.id)).map(userButton)}
+          </>}
+        </aside>
+        {mode === 'create' ? <TaoTin onPublished={story => { setStories(current => [...current, story]); openStory(story) }} /> : <main className="story-stage">
+          {error && <p role="alert" className="story-error">{error} <button onClick={load}>Tải lại</button></p>}
+          {selected ? <TrinhXemTin key={selected.idTin} story={selected} group={group} previous={Boolean(adjacentStory(groups, selectedId, -1))} onPrevious={() => move(-1)} onNext={() => move(1)} onReact={react} onStoryReply={result => { close(); onStoryReply?.(result) }} /> : <div className="story-empty"><h2>{groups.length ? 'Bạn đã xem hết tin' : 'Chưa có tin đang hiển thị'}</h2><p>Chọn một người bên trái để xem lại hoặc tạo tin mới.</p><button className="story-submit" onClick={create}>Tạo tin</button></div>}
+        </main>}
+      </div>}
+    </dialog>
+  </section>
 }

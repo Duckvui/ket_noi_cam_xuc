@@ -12,11 +12,11 @@ class Pet extends Model
 
     public $timestamps = false;
 
-    protected $fillable = ['idTaiKhoan', 'TenPet', 'LoaiPet', 'AnhPet', 'idCamXucHienTai', 'TrangThaiPet', 'CapDo', 'KinhNghiem', 'NgayTao'];
+    protected $fillable = ['idTaiKhoan', 'idTaiKhoan2', 'DiemCamXuc', 'NgayCapNhat', 'TenPet', 'LoaiPet', 'AnhPet', 'idCamXucHienTai', 'TrangThaiPet', 'CapDo', 'KinhNghiem', 'NgayTao'];
 
     protected function casts(): array
     {
-        return ['NgayTao' => 'datetime'];
+        return ['NgayTao' => 'datetime', 'NgayCapNhat' => 'datetime', 'DiemCamXuc' => 'integer'];
     }
 
     public function taiKhoan()
@@ -29,8 +29,18 @@ class Pet extends Model
         return $this->belongsTo(CamXuc::class, 'idCamXucHienTai');
     }
 
+    public function taiKhoan2()
+    {
+        return $this->belongsTo(TaiKhoan::class, 'idTaiKhoan2');
+    }
+
     public function tuongTacs()
     {
         return $this->hasMany(TuongTacPet::class, 'idPet');
+    }
+
+    public function lichSuCamXucs()
+    {
+        return $this->hasMany(LichSuCamXucPet::class, 'idPet');
     }
 }

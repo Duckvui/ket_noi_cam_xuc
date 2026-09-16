@@ -35,6 +35,16 @@ class TaiKhoan extends Authenticatable
         return $this->hasMany(Avatar::class, 'idTaiKhoan');
     }
 
+    public function avatarHienTai()
+    {
+        return $this->hasOne(Avatar::class, 'idTaiKhoan')->latestOfMany('idAvatar');
+    }
+
+    public function camXucHienTai()
+    {
+        return $this->hasOne(TrangThaiCamXuc::class, 'idTaiKhoan')->ofMany(['idTrangThaiCamXuc' => 'max'], fn ($query) => $query->where('TrangThai', 'Hien_Tai'));
+    }
+
     public function baiViets()
     {
         return $this->hasMany(BaiViet::class, 'idTaiKhoan');

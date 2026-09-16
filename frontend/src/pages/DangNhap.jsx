@@ -31,6 +31,7 @@ export default function LoginPage() {
             onSubmit={handleLogin}
             loading={loading}
             error={error}
+            onRegister={() => setDangKy(true)}
         />
     );
 }

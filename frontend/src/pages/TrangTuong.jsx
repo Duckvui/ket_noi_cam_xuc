@@ -1,3 +1,6 @@
+import PetChung from '../components/PetChung'
+import ChinhSuaCamXuc from '../components/ChinhSuaCamXuc'
+import AvatarAnimation from '../components/AvatarAnimation'
 import { useEffect, useState } from 'react'
 import { api } from '../api'
 import BaiDang from '../components/wall/BaiDang'
@@ -27,6 +30,7 @@ function WallPage({ user, onLogout }) {
   const [submittedSearch, setSubmittedSearch] = useState('')
   const [profilePage, setProfilePage] = useState(null)
   const [chatOpen, setChatOpen] = useState(false)
+  const [activeConversationId, setActiveConversationId] = useState(null)
 
   async function loadPosts() {
     setLoadingPosts(true); setFeedError('')
@@ -72,10 +76,19 @@ function WallPage({ user, onLogout }) {
   function toggleLike(id) { setLiked((current) => current.includes(id) ? current.filter((postId) => postId !== id) : [...current, id]) }
   async function startChat(recipientId) {
     const response = await api('/cuoc-tro-chuyens', { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify({ recipient_id: recipientId }) })
-    if (response.ok) setChatOpen(true)
+    if (response.ok) {
+      const body = await response.json()
+      setActiveConversationId(body.data.id)
+      setChatOpen(true)
+    }
   }
 
-  return <div className="wall"><header className="topbar"><a className="brand" href="#home"><span>✦</span> Cảm Xúc</a><form className="search" onSubmit={(event) => { event.preventDefault(); setSubmittedSearch(friendSearch.trim()) }}>⌕ <input value={friendSearch} onChange={(event) => setFriendSearch(event.target.value)} placeholder="Tìm tên hoặc nick bạn bè..." /><button type="submit" aria-label="Tìm">⌕</button></form><nav><button className="nav-active">⌂</button><button>♧</button><button onClick={() => setChatOpen(true)}>✉</button></nav><div className="top-avatar">💜</div></header><main className="wall-layout"><ThanhBenTrai user={user} onLogout={onLogout} friendCount={friendCount} />{profilePage ? <TrangCaNhan profile={profilePage} onBack={() => setProfilePage(null)} onStartChat={startChat} /> : <section className="feed"><section className="page-heading"><p>TRANG TƯỜNG</p><h1>Hôm nay bạn cảm thấy thế nào?</h1></section><TinNoiBat /><KhungDangBai user={user} draft={draft} setDraft={setDraft} photo={photo} onPhotoChange={changePhoto} mood={mood} moods={moods} setMood={setMood} visibility={visibility} setVisibility={setVisibility} onPublish={publish} saving={publishing} error={postError} />{loadingPosts && <p className="feed-message" role="status">Đang tải bài viết...</p>}{feedError && <p className="feed-message error" role="alert">{feedError} <button onClick={loadPosts}>Thử lại</button></p>}{!loadingPosts && !feedError && posts.length === 0 && <p className="feed-message">Chưa có bài viết nào. Hãy là người đầu tiên chia sẻ cảm xúc của bạn.</p>}{posts.map((post) => <BaiDang key={post.id} post={post} isLiked={liked.includes(post.id)} onToggleLike={() => toggleLike(post.id)} />)}</section>}<ThanhBenPhai onFriendCountChange={setFriendCount} queryFromHeader={submittedSearch} onOpenProfile={setProfilePage} /></main><ChatBox open={chatOpen} onClose={() => setChatOpen(false)} user={user} /></div>
+  function openStoryConversation(result) {
+    setActiveConversationId(result.idCuocTroChuyen)
+    setChatOpen(true)
+  }
+
+  return <div className="wall"><header className="topbar"><a className="brand" href="#home"><span>✦</span> Cảm Xúc</a><form className="search" onSubmit={(event) => { event.preventDefault(); setSubmittedSearch(friendSearch.trim()) }}>⌕ <input value={friendSearch} onChange={(event) => setFriendSearch(event.target.value)} placeholder="Tìm tên hoặc nick bạn bè..." /><button type="submit" aria-label="Tìm">⌕</button></form><nav><button className="nav-active">⌂</button><button>♧</button><button onClick={() => setChatOpen(true)}>✉</button></nav><AvatarAnimation idTaiKhoan={user.id} /></header><main className="wall-layout"><ThanhBenTrai user={user} onLogout={onLogout} friendCount={friendCount} />{profilePage ? <TrangCaNhan profile={profilePage} onBack={() => setProfilePage(null)} onStartChat={startChat} /> : <section className="feed"><section className="page-heading"><p>TRANG TƯỜNG</p><h1>Hôm nay bạn cảm thấy thế nào?</h1></section><ChinhSuaCamXuc user={user} /><PetChung user={user} /><TinNoiBat user={user} onStoryReply={openStoryConversation} /><KhungDangBai user={user} draft={draft} setDraft={setDraft} photo={photo} onPhotoChange={changePhoto} mood={mood} moods={moods} setMood={setMood} visibility={visibility} setVisibility={setVisibility} onPublish={publish} saving={publishing} error={postError} />{loadingPosts && <p className="feed-message" role="status">Đang tải bài viết...</p>}{feedError && <p className="feed-message error" role="alert">{feedError} <button onClick={loadPosts}>Thử lại</button></p>}{!loadingPosts && !feedError && posts.length === 0 && <p className="feed-message">Chưa có bài viết nào. Hãy là người đầu tiên chia sẻ cảm xúc của bạn.</p>}{posts.map((post) => <BaiDang key={post.id} post={post} isLiked={liked.includes(post.id)} onToggleLike={() => toggleLike(post.id)} />)}</section>}<ThanhBenPhai onFriendCountChange={setFriendCount} queryFromHeader={submittedSearch} onOpenProfile={setProfilePage} /></main><ChatBox open={chatOpen} onClose={() => setChatOpen(false)} user={user} activeConversationId={activeConversationId} /></div>
 }
 
 export default WallPage

@@ -40,6 +40,7 @@ class BaiVietController extends Controller
 
         return [
             'id' => $baiViet->idBaiViet,
+            'idTaiKhoan' => $baiViet->idTaiKhoan,
             'content' => $baiViet->NoiDung,
             'image_url' => $baiViet->HinhAnh ? route('bai-viets.media', $baiViet->idBaiViet, false) : null,
             'visibility' => $baiViet->CheDoHienThi,
@@ -86,7 +87,9 @@ class BaiVietController extends Controller
                 'TrangThaiBaiViet' => 'Binh_Thuong',
             ]);
         } catch (\Throwable $exception) {
-            if ($path) Storage::disk('local')->delete($path);
+            if ($path) {
+                Storage::disk('local')->delete($path);
+            }
             throw $exception;
         }
 
@@ -113,8 +116,12 @@ class BaiVietController extends Controller
         $post = $this->visible($request)->findOrFail($baiViet);
         $data = $request->validate(['type' => ['required', Rule::in(['Thich', 'Yeu_Thich', 'Haha', 'Buon', 'Tuc_Gian'])]]);
         $reaction = TuongTacBaiViet::where('idBaiViet', $post->idBaiViet)->where('idTaiKhoan', $request->user('tai_khoan')->idTaiKhoan)->first();
-        if ($reaction?->LoaiTuongTac === $data['type']) $reaction->delete();
-        else TuongTacBaiViet::updateOrCreate(['idBaiViet' => $post->idBaiViet, 'idTaiKhoan' => $request->user('tai_khoan')->idTaiKhoan], ['LoaiTuongTac' => $data['type'], 'ThoiGianTuongTac' => now()]);
+        if ($reaction?->LoaiTuongTac === $data['type']) {
+            $reaction->delete();
+        } else {
+            TuongTacBaiViet::updateOrCreate(['idBaiViet' => $post->idBaiViet, 'idTaiKhoan' => $request->user('tai_khoan')->idTaiKhoan], ['LoaiTuongTac' => $data['type'], 'ThoiGianTuongTac' => now()]);
+        }
+
         return response()->json(['data' => ['likes' => $post->tuongTacs()->count(), 'reaction' => $reaction?->LoaiTuongTac === $data['type'] ? null : $data['type']]]);
     }
 
@@ -154,6 +161,7 @@ class BaiVietController extends Controller
     {
         return [
             'id' => $comment->idBinhLuan,
+            'idTaiKhoan' => $comment->idTaiKhoan,
             'parent_id' => $comment->idBinhLuanCha,
             'content' => $comment->NoiDung,
             'created_at' => $comment->ThoiGianBinhLuan?->toISOString(),
@@ -180,16 +188,129 @@ class BaiVietController extends Controller
     /**
      * Update the specified resource in storage.
      */
+    /**
+     * Cập nhật bài viết.
+     */
     public function update(Request $request, BaiViet $baiViet)
     {
-        //
+        $user = $request->user('tai_khoan');
+
+        abort_unless(
+            $user && $user->TrangThaiTaiKhoan === 'Hoat_Dong',
+            403,
+            'Tài khoản không có quyền thực hiện thao tác này.'
+        );
+
+        abort_unless(
+            (int) $baiViet->idTaiKhoan === (int) $user->idTaiKhoan,
+            403,
+            'Bạn không có quyền sửa bài viết này.'
+        );
+
+        abort_unless(
+            $baiViet->TrangThaiBaiViet === 'Binh_Thuong',
+            404,
+            'Bài viết không tồn tại hoặc đã bị xóa.'
+        );
+
+        $data = $request->validate([
+            'content' => [
+                'required',
+                'string',
+                'max:5000',
+            ],
+            'visibility' => [
+                'sometimes',
+                Rule::in([
+                    'Cong_Khai',
+                    'Ban_Be',
+                    'Chi_Minh_Toi',
+                ]),
+            ],
+            'mood_id' => [
+                'sometimes',
+                'nullable',
+                'integer',
+                Rule::exists('cam_xucs', 'idCamXuc')
+                    ->where('TrangThai', 'Dang_Su_Dung'),
+            ],
+        ], [
+            'content.required' => 'Nội dung bài viết không được để trống.',
+            'content.string' => 'Nội dung bài viết không hợp lệ.',
+            'content.max' => 'Nội dung bài viết tối đa 5000 ký tự.',
+            'visibility.in' => 'Chế độ hiển thị không hợp lệ.',
+            'mood_id.exists' => 'Cảm xúc không tồn tại hoặc đã ngừng sử dụng.',
+        ]);
+
+        $baiViet->NoiDung = trim($data['content']);
+
+        if (array_key_exists('visibility', $data)) {
+            $baiViet->CheDoHienThi = $data['visibility'];
+        }
+
+        if (array_key_exists('mood_id', $data)) {
+            $baiViet->idCamXuc = $data['mood_id'];
+        }
+
+        $baiViet->NgayCapNhat = now();
+        $baiViet->save();
+
+        $baiViet->load([
+            'taiKhoan.thongTinCaNhan',
+            'camXuc',
+        ]);
+
+        $baiViet->loadCount([
+            'tuongTacs',
+            'binhLuans',
+        ]);
+
+        return response()->json([
+            'message' => 'Cập nhật bài viết thành công.',
+            'data' => $this->data($baiViet),
+        ]);
     }
 
     /**
-     * Remove the specified resource from storage.
+     * Xóa bài viết.
      */
-    public function destroy(BaiViet $baiViet)
+    public function destroy(Request $request, BaiViet $baiViet)
     {
-        //
+        $user = $request->user('tai_khoan');
+
+        abort_unless(
+            $user && $user->TrangThaiTaiKhoan === 'Hoat_Dong',
+            403,
+            'Tài khoản không có quyền thực hiện thao tác này.'
+        );
+
+        abort_unless(
+            (int) $baiViet->idTaiKhoan === (int) $user->idTaiKhoan,
+            403,
+            'Bạn không có quyền xóa bài viết này.'
+        );
+
+        abort_unless(
+            $baiViet->TrangThaiBaiViet === 'Binh_Thuong',
+            404,
+            'Bài viết không tồn tại hoặc đã bị xóa.'
+        );
+
+        /*
+         * Xóa mềm bằng cách đổi trạng thái.
+         * Ảnh vẫn được giữ lại, có thể khôi phục bài viết sau này.
+         */
+        $baiViet->update([
+            'TrangThaiBaiViet' => 'Da_Xoa',
+            'NgayCapNhat' => now(),
+        ]);
+
+        return response()->json([
+            'message' => 'Xóa bài viết thành công.',
+            'data' => [
+                'id' => $baiViet->idBaiViet,
+                'idTaiKhoan' => $baiViet->idTaiKhoan,
+            ],
+        ]);
     }
 }

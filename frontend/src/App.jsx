@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import { api } from './api'
 import TrangDangNhap from './pages/TrangDangNhap'
+import TrangDangKy from './pages/TrangDangKy'
 import TrangTuong from './pages/TrangTuong'
 import './App.css'
+import { NhaCungCapCamXuc } from './components/NguCanhCamXuc'
 
 const initialForm = { tai_khoan: '', mat_khau: '' }
 
@@ -11,11 +13,19 @@ function App() {
   const [user, setUser] = useState(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [registrationMessage, setRegistrationMessage] = useState('')
+  const [authPage, setAuthPage] = useState(() => window.location.hash === '#dang-ky' ? 'register' : 'login')
+
+  useEffect(() => {
+    const syncPage = () => { setAuthPage(window.location.hash === '#dang-ky' ? 'register' : 'login'); setError('') }
+    window.addEventListener('hashchange', syncPage)
+    return () => window.removeEventListener('hashchange', syncPage)
+  }, [])
 
   useEffect(() => { api('/auth/me').then((response) => (response.ok ? response.json() : null)).then((payload) => payload?.data && setUser(payload.data)).catch(() => {}) }, [])
 
   async function login(event) {
-    event.preventDefault(); setLoading(true); setError('')
+    event.preventDefault(); setLoading(true); setError(''); setRegistrationMessage('')
     try {
       const response = await api('/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify(form) })
       const payload = await response.json()
@@ -26,7 +36,15 @@ function App() {
 
   async function logout() { await api('/auth/logout', { method: 'POST' }); setUser(null) }
 
-  return user ? <TrangTuong user={user} onLogout={logout} /> : <TrangDangNhap form={form} setForm={setForm} error={error} loading={loading} onSubmit={login} />
+  function registered(account) {
+    setForm({ tai_khoan: account.tai_khoan, mat_khau: '' })
+    setError('')
+    setRegistrationMessage('Đăng ký thành công! Nhập mật khẩu để đăng nhập.')
+    setAuthPage('login')
+    window.location.hash = 'dang-nhap'
+  }
+
+  return user ? <NhaCungCapCamXuc key={user.id}><TrangTuong user={user} onLogout={logout} /></NhaCungCapCamXuc> : authPage === 'register' ? <TrangDangKy onLogin={() => { window.location.hash = 'dang-nhap' }} onRegistered={registered} /> : <TrangDangNhap form={form} setForm={setForm} error={error} loading={loading} onSubmit={login} success={registrationMessage} />
 }
 
 export default App

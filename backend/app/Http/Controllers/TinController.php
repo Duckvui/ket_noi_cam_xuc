@@ -3,11 +3,15 @@
 namespace App\Http\Controllers;
 
 use App\Models\BanBe;
-use App\Models\Tin;
+use App\Models\CuocTroChuyen;
 use App\Models\LuotXemTin;
+use App\Models\ThanhVienCuocTroChuyen;
+use App\Models\Tin;
+use App\Models\TinNhan;
 use App\Models\TuongTacTin;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
@@ -27,11 +31,14 @@ class TinController extends Controller
 
     private function data(Tin $tin, ?int $viewerId = null): array
     {
-        $tin->loadMissing('taiKhoan.thongTinCaNhan');
+        $tin->loadMissing('taiKhoan.thongTinCaNhan', 'taiKhoan.avatarHienTai');
         $profile = $tin->taiKhoan->thongTinCaNhan;
 
         return [
             'idTin' => $tin->idTin,
+            'idTaiKhoan' => $tin->idTaiKhoan,
+            'avatar' => $tin->taiKhoan->avatarHienTai?->AnhAvatar,
+            'MauNen' => $tin->MauNen ?? 'purple',
             'NoiDung' => $tin->NoiDung,
             'LoaiTin' => $tin->LoaiTin,
             'CheDoHienThi' => $tin->CheDoHienThi,
@@ -40,20 +47,22 @@ class TinController extends Controller
             'media_url' => $tin->DuongDanMedia ? route('tins.media', $tin->idTin, false) : null,
             'ten_hien_thi' => trim(($profile?->Ho ?? '').' '.($profile?->Ten ?? '')) ?: $tin->taiKhoan->TaiKhoan,
             'is_owner' => $viewerId === $tin->idTaiKhoan,
-            'views_count' => $tin->luotXems()->count(),
-            'reactions_count' => $tin->tuongTacs()->count(),
             'my_reaction' => $viewerId ? $tin->tuongTacs()->where('idTaiKhoan', $viewerId)->value('LoaiTuongTac') : null,
-            'viewers' => $viewerId === $tin->idTaiKhoan ? $tin->luotXems()->with('taiKhoan.thongTinCaNhan')->latest('ThoiGianXem')->get()->map(fn ($view) => [
-                'id' => $view->idTaiKhoan,
-                'name' => trim(($view->taiKhoan->thongTinCaNhan?->Ho ?? '').' '.($view->taiKhoan->thongTinCaNhan?->Ten ?? '')) ?: $view->taiKhoan->TaiKhoan,
-            ]) : [],
+            ...($viewerId === $tin->idTaiKhoan ? [
+                'views_count' => $tin->luotXems()->count(),
+                'reactions_count' => $tin->tuongTacs()->count(),
+                'viewers' => $tin->luotXems()->with('taiKhoan.thongTinCaNhan')->latest('ThoiGianXem')->get()->map(fn ($view) => [
+                    'id' => $view->idTaiKhoan,
+                    'name' => trim(($view->taiKhoan->thongTinCaNhan?->Ho ?? '').' '.($view->taiKhoan->thongTinCaNhan?->Ten ?? '')) ?: $view->taiKhoan->TaiKhoan,
+                ]),
+            ] : []),
         ];
     }
 
     public function index(Request $request)
     {
-        return response()->json(['data' => $this->visible($request)->with('taiKhoan.thongTinCaNhan')
-            ->orderByDesc('ThoiGianDang')->orderByDesc('idTin')->limit(100)->get()->map(fn ($tin) => $this->data($tin, $request->user('tai_khoan')->idTaiKhoan))]);
+        return response()->json(['data' => $this->visible($request)->with(['taiKhoan.thongTinCaNhan', 'taiKhoan.avatarHienTai'])
+            ->orderBy('ThoiGianDang')->orderBy('idTin')->get()->map(fn ($tin) => $this->data($tin, $request->user('tai_khoan')->idTaiKhoan))]);
     }
 
     public function store(Request $request)
@@ -61,6 +70,7 @@ class TinController extends Controller
         abort_unless($request->user('tai_khoan')->TrangThaiTaiKhoan === 'Hoat_Dong', 403);
         $data = $request->validate([
             'LoaiTin' => ['required', Rule::in(['ANH', 'VIDEO', 'VAN_BAN'])],
+            'MauNen' => ['sometimes', Rule::in(['purple', 'blue', 'pink', 'green', 'dark'])],
             'NoiDung' => ['required_if:LoaiTin,VAN_BAN', 'nullable', 'string', 'max:2000'],
             'CheDoHienThi' => ['required', Rule::in(['Cong_Khai', 'Ban_Be', 'Chi_Minh_Toi'])],
             'media' => $request->input('LoaiTin') === 'VAN_BAN' ? ['prohibited'] : [
@@ -86,6 +96,7 @@ class TinController extends Controller
                 'idTaiKhoan' => $request->user('tai_khoan')->idTaiKhoan,
                 'NoiDung' => $data['NoiDung'] ?? null,
                 'LoaiTin' => $data['LoaiTin'],
+                'MauNen' => $data['LoaiTin'] === 'VAN_BAN' ? ($data['MauNen'] ?? 'purple') : null,
                 'CheDoHienThi' => $data['CheDoHienThi'],
                 'DuongDanMedia' => $path,
                 'ThoiGianDang' => now(),
@@ -117,6 +128,7 @@ class TinController extends Controller
         if ($story->idTaiKhoan !== $viewer->idTaiKhoan) {
             LuotXemTin::updateOrCreate(['idTin' => $story->idTin, 'idTaiKhoan' => $viewer->idTaiKhoan], ['ThoiGianXem' => now()]);
         }
+
         return response()->json(['data' => $this->data($story, $viewer->idTaiKhoan)]);
     }
 
@@ -126,8 +138,83 @@ class TinController extends Controller
         $data = $request->validate(['type' => ['required', Rule::in(['Thich', 'Yeu_Thich', 'Haha', 'Wow', 'Buon', 'Tuc_Gian'])]]);
         $viewer = $request->user('tai_khoan');
         $reaction = TuongTacTin::where('idTin', $story->idTin)->where('idTaiKhoan', $viewer->idTaiKhoan)->first();
-        if ($reaction?->LoaiTuongTac === $data['type']) $reaction->delete();
-        else TuongTacTin::updateOrCreate(['idTin' => $story->idTin, 'idTaiKhoan' => $viewer->idTaiKhoan], ['LoaiTuongTac' => $data['type'], 'ThoiGianTuongTac' => now()]);
+        if ($reaction?->LoaiTuongTac === $data['type']) {
+            $reaction->delete();
+        } else {
+            TuongTacTin::updateOrCreate(['idTin' => $story->idTin, 'idTaiKhoan' => $viewer->idTaiKhoan], ['LoaiTuongTac' => $data['type'], 'ThoiGianTuongTac' => now()]);
+        }
+
         return response()->json(['data' => $this->data($story, $viewer->idTaiKhoan)]);
+    }
+
+    public function reply(Request $request, int $tin)
+    {
+        $story = $this->visible($request)->findOrFail($tin);
+        $sender = $request->user('tai_khoan');
+        abort_if($story->idTaiKhoan === $sender->idTaiKhoan, 422, 'Không thể trả lời tin của chính mình.');
+
+        $data = $request->validate([
+            'NoiDung' => ['required', 'string', 'max:2000'],
+        ]);
+        $content = trim($data['NoiDung']);
+        abort_if($content === '', 422, 'Nội dung trả lời không được để trống.');
+
+        [$conversation, $message] = DB::transaction(function () use ($sender, $story, $content): array {
+            $memberConversationIds = ThanhVienCuocTroChuyen::query()
+                ->where('idTaiKhoan', $sender->idTaiKhoan)
+                ->where('TrangThai', 'Dang_Tham_Gia')
+                ->pluck('idCuocTroChuyen');
+
+            $conversation = CuocTroChuyen::query()
+                ->where('LoaiCuocTroChuyen', 'Ca_Nhan')
+                ->where('TrangThai', 'Dang_Hoat_Dong')
+                ->whereIn('idCuocTroChuyen', $memberConversationIds)
+                ->whereHas('thanhViens', fn ($query) => $query->where('idTaiKhoan', $story->idTaiKhoan)->where('TrangThai', 'Dang_Tham_Gia'))
+                ->whereHas('thanhViens', fn ($query) => $query->where('TrangThai', 'Dang_Tham_Gia'), '=', 2)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $conversation) {
+                $conversation = CuocTroChuyen::create([
+                    'LoaiCuocTroChuyen' => 'Ca_Nhan',
+                    'NgayTao' => now(),
+                    'NgayCapNhat' => now(),
+                    'TrangThai' => 'Dang_Hoat_Dong',
+                ]);
+
+                foreach ([$sender->idTaiKhoan, $story->idTaiKhoan] as $accountId) {
+                    ThanhVienCuocTroChuyen::create([
+                        'idCuocTroChuyen' => $conversation->idCuocTroChuyen,
+                        'idTaiKhoan' => $accountId,
+                        'NgayThamGia' => now(),
+                        'TrangThai' => 'Dang_Tham_Gia',
+                    ]);
+                }
+            }
+
+            $message = TinNhan::create([
+                'idCuocTroChuyen' => $conversation->idCuocTroChuyen,
+                'idNguoiGui' => $sender->idTaiKhoan,
+                'idTin' => $story->idTin,
+                'NoiDung' => $content,
+                'LoaiTinNhan' => 'Van_Ban',
+                'ThoiGianGui' => now(),
+                'TrangThaiTinNhan' => 'Da_Gui',
+            ]);
+            $conversation->update(['NgayCapNhat' => now()]);
+
+            return [$conversation, $message];
+        });
+
+        return response()->json(['data' => [
+            'idCuocTroChuyen' => $conversation->idCuocTroChuyen,
+            'tinNhan' => [
+                'id' => $message->idTinNhan,
+                'content' => $message->NoiDung,
+                'sent_at' => $message->ThoiGianGui,
+                'sender_id' => $message->idNguoiGui,
+                'idTin' => $message->idTin,
+            ],
+        ]], 201);
     }
 }

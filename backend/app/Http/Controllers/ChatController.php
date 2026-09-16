@@ -18,12 +18,13 @@ class ChatController extends Controller
     private function person(TaiKhoan $account): array
     {
         $account->loadMissing('thongTinCaNhan');
+
         return ['id' => $account->idTaiKhoan, 'name' => trim(($account->thongTinCaNhan?->Ho ?? '').' '.($account->thongTinCaNhan?->Ten ?? '')) ?: $account->TaiKhoan];
     }
 
     private function message(TinNhan $message): array
     {
-        return ['id' => $message->idTinNhan, 'content' => $message->NoiDung, 'sent_at' => $message->ThoiGianGui, 'sender_id' => $message->idNguoiGui];
+        return ['id' => $message->idTinNhan, 'content' => $message->NoiDung, 'sent_at' => $message->ThoiGianGui, 'sender_id' => $message->idNguoiGui, 'idTin' => $message->idTin];
     }
 
     public function index(Request $request)
@@ -34,8 +35,10 @@ class ChatController extends Controller
             ->map(function (CuocTroChuyen $conversation) use ($me) {
                 $other = $conversation->thanhViens->first(fn ($member) => $member->idTaiKhoan !== $me->idTaiKhoan)?->taiKhoan;
                 $last = $conversation->tinNhans->first();
+
                 return ['id' => $conversation->idCuocTroChuyen, 'person' => $other ? $this->person($other) : ['id' => $me->idTaiKhoan, 'name' => 'Nhóm chat'], 'last_message' => $last?->NoiDung, 'updated_at' => $last?->ThoiGianGui ?? $conversation->NgayCapNhat];
             })->sortByDesc('updated_at')->values();
+
         return response()->json(['data' => $items]);
     }
 
@@ -50,23 +53,29 @@ class ChatController extends Controller
             ->whereHas('thanhViens', fn ($q) => $q->where('TrangThai', 'Dang_Tham_Gia'), '=', 2)->first();
         if (! $conversation) {
             $conversation = CuocTroChuyen::create(['LoaiCuocTroChuyen' => 'Ca_Nhan', 'NgayTao' => now(), 'NgayCapNhat' => now(), 'TrangThai' => 'Dang_Hoat_Dong']);
-            foreach ([$me->idTaiKhoan, $data['recipient_id']] as $accountId) ThanhVienCuocTroChuyen::create(['idCuocTroChuyen' => $conversation->idCuocTroChuyen, 'idTaiKhoan' => $accountId, 'NgayThamGia' => now(), 'TrangThai' => 'Dang_Tham_Gia']);
+            foreach ([$me->idTaiKhoan, $data['recipient_id']] as $accountId) {
+                ThanhVienCuocTroChuyen::create(['idCuocTroChuyen' => $conversation->idCuocTroChuyen, 'idTaiKhoan' => $accountId, 'NgayThamGia' => now(), 'TrangThai' => 'Dang_Tham_Gia']);
+            }
         }
+
         return response()->json(['data' => ['id' => $conversation->idCuocTroChuyen]]);
     }
 
     public function messages(Request $request, int $conversation)
     {
         $this->member($conversation, $request->user('tai_khoan')->idTaiKhoan);
+
         return response()->json(['data' => TinNhan::where('idCuocTroChuyen', $conversation)->whereNull('NgayXoa')->oldest('ThoiGianGui')->limit(100)->get()->map(fn ($message) => $this->message($message))]);
     }
 
     public function send(Request $request, int $conversation)
     {
-        $me = $request->user('tai_khoan'); $this->member($conversation, $me->idTaiKhoan);
+        $me = $request->user('tai_khoan');
+        $this->member($conversation, $me->idTaiKhoan);
         $data = $request->validate(['content' => ['required', 'string', 'max:2000']]);
         $message = TinNhan::create(['idCuocTroChuyen' => $conversation, 'idNguoiGui' => $me->idTaiKhoan, 'NoiDung' => trim($data['content']), 'LoaiTinNhan' => 'Van_Ban', 'ThoiGianGui' => now(), 'TrangThaiTinNhan' => 'Da_Gui']);
         CuocTroChuyen::whereKey($conversation)->update(['NgayCapNhat' => now()]);
+
         return response()->json(['data' => $this->message($message)], 201);
     }
 }

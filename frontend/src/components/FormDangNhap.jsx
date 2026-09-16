@@ -35,13 +35,27 @@ export default function LoginForm({ onSubmit, loading, error }) {
                 />
             </div>
 
-            {error && (
-                <p>{error}</p>
-            )}
+            {error && <p>{error}</p>}
 
             <button type="submit" disabled={loading}>
                 {loading ? "Đang đăng nhập..." : "Đăng nhập"}
             </button>
+
+            <div style={{ marginTop: "15px" }}>
+                <span>Chưa có tài khoản? </span>
+
+                <button
+                    type="button"
+                    style={{
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                        textDecoration: "underline",
+                    }}
+                >
+                    Đăng ký tài khoản mới
+                </button>
+            </div>
         </form>
     );
 }

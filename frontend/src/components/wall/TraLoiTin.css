@@ -1,0 +1,151 @@
+/* Toàn bộ thanh dưới cùng */
+.story-actions {
+  position: absolute;
+  right: 20px;
+  bottom: 18px;
+  left: 20px;
+
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+/* Ô gửi tin nhắn */
+.story-message {
+  width: min(380px, 45vw);
+  margin: 0;
+}
+
+.story-message-box {
+  display: flex;
+  align-items: center;
+
+  width: 100%;
+  height: 48px;
+
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+}
+
+.story-message-box input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0 18px;
+
+  color: #fff;
+  font-size: 16px;
+
+  border: none;
+  outline: none;
+  background: transparent;
+}
+
+.story-message-box input::placeholder {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.story-send-button {
+  display: grid;
+  place-items: center;
+
+  width: 42px;
+  height: 42px;
+  margin-right: 3px;
+
+  color: #fff;
+  font-size: 20px;
+
+  border: none;
+  border-radius: 50%;
+  background: #0866ff;
+  cursor: pointer;
+}
+
+.story-send-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.story-message-error {
+  position: absolute;
+  bottom: 52px;
+
+  padding: 5px 10px;
+  color: #fff;
+  background: rgba(200, 0, 0, 0.85);
+  border-radius: 6px;
+}
+
+/* Dãy cảm xúc */
+.story-actions .story-reactions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+}
+
+.story-actions .story-reactions button {
+  display: grid;
+  place-items: center;
+
+  width: 48px;
+  height: 48px;
+  padding: 0;
+
+  font-size: 30px;
+  line-height: 1;
+
+  border: 2px solid transparent;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+
+  transition:
+    transform 0.15s ease,
+    background 0.15s ease;
+}
+
+.story-actions .story-reactions button:hover {
+  transform: scale(1.2);
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.story-actions .story-reactions button.active {
+  transform: scale(1.15);
+  border-color: #fff;
+  background: rgba(8, 102, 255, 0.35);
+}
+
+/* Màn hình nhỏ */
+@media (max-width: 768px) {
+  .story-actions {
+    right: 10px;
+    bottom: 12px;
+    left: 10px;
+    gap: 5px;
+  }
+
+  .story-message {
+    flex: 1;
+    width: auto;
+  }
+
+  .story-message-box {
+    height: 42px;
+  }
+
+  .story-actions .story-reactions {
+    gap: 1px;
+  }
+
+  .story-actions .story-reactions button {
+    width: 34px;
+    height: 40px;
+    font-size: 23px;
+  }
+}

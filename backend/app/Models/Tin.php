@@ -12,7 +12,7 @@ class Tin extends Model
 
     public $timestamps = false;
 
-    protected $fillable = ['idTaiKhoan', 'NoiDung', 'LoaiTin', 'DuongDanMedia', 'CheDoHienThi', 'ThoiGianDang', 'ThoiGianHetHan', 'TrangThai'];
+    protected $fillable = ['idTaiKhoan', 'NoiDung', 'LoaiTin', 'MauNen', 'DuongDanMedia', 'CheDoHienThi', 'ThoiGianDang', 'ThoiGianHetHan', 'TrangThai'];
 
     protected function casts(): array
     {
@@ -32,5 +32,10 @@ class Tin extends Model
     public function tuongTacs()
     {
         return $this->hasMany(TuongTacTin::class, 'idTin');
+    }
+
+    public function tinNhans()
+    {
+        return $this->hasMany(TinNhan::class, 'idTin');
     }
 }

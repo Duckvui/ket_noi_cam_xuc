@@ -12,7 +12,7 @@ class TinNhan extends Model
 
     public $timestamps = false;
 
-    protected $fillable = ['idCuocTroChuyen', 'idNguoiGui', 'NoiDung', 'LoaiTinNhan', 'ThoiGianGui', 'TrangThaiTinNhan', 'NgayXoa'];
+    protected $fillable = ['idCuocTroChuyen', 'idNguoiGui', 'idTin', 'NoiDung', 'LoaiTinNhan', 'ThoiGianGui', 'TrangThaiTinNhan', 'NgayXoa'];
 
     protected function casts(): array
     {
@@ -27,5 +27,10 @@ class TinNhan extends Model
     public function nguoiGui()
     {
         return $this->belongsTo(TaiKhoan::class, 'idNguoiGui');
+    }
+
+    public function tin()
+    {
+        return $this->belongsTo(Tin::class, 'idTin');
     }
 }

@@ -1,0 +1,8 @@
+import { useState } from 'react'
+
+export default function LoiMoiNuoiPet({ user, data, busy, onGui, onTraLoi }) {
+  const [ban, setBan] = useState('')
+  const [ten, setTen] = useState('')
+  const [loai, setLoai] = useState('')
+  return <details><summary>Mời bạn nuôi pet chung</summary>{data.ban_be.length ? <form className="form-pet" onSubmit={(e) => { e.preventDefault(); onGui({ idTaiKhoan: Number(ban), TenPet: ten.trim(), LoaiPet: loai }) }}><label>Bạn bè<select required value={ban} onChange={(e) => setBan(e.target.value)}><option value="">Chọn một người bạn</option>{data.ban_be.map((friend) => <option key={friend.id} value={friend.id}>{friend.ten}</option>)}</select></label><label>Tên pet<input required maxLength={50} value={ten} onChange={(e) => setTen(e.target.value)} placeholder="Đặt tên pet" /></label><label>Loại pet<select required value={loai} onChange={(e) => setLoai(e.target.value)}><option value="">Chọn pet</option>{data.loai_pet.map((type) => <option key={type.ma} value={type.ma}>{type.ten}</option>)}</select></label><button disabled={busy}>Gửi lời mời</button></form> : <p>Kết bạn để cùng nuôi pet.</p>}{data.loi_moi.map((invite) => <div className="loi-moi-pet" key={invite.idLoiMoiPet}><p>{invite.ten_ban} · {invite.TenPet}</p>{invite.idNguoiGui === user.id ? <small>Đang chờ bạn phản hồi</small> : <><button disabled={busy} onClick={() => onTraLoi(invite.idLoiMoiPet, 'chap_nhan')}>Đồng ý</button><button disabled={busy} onClick={() => onTraLoi(invite.idLoiMoiPet, 'tu_choi')}>Từ chối</button></>}</div>)}{!data.loi_moi.length && <p>Không có lời mời đang chờ.</p>}</details>
+}
